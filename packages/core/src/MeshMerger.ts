@@ -10,6 +10,7 @@ import type {
   ProgressCallback,
   AtlasMode,
   MaterialOverrides,
+  AtlasResult,
 } from "./types";
 import { generateId, mergeTransform } from "./utils/mathUtils";
 
@@ -24,6 +25,8 @@ export class MeshMerger {
   private onProgress?: ProgressCallback;
   private mergedScene?: THREE.Scene;
   private mergedMesh?: THREE.Mesh;
+  private lastAtlasResult?: AtlasResult;
+  private isMerging = false;
 
   constructor() {
     this.modelLoader = new ModelLoader();
@@ -65,24 +68,17 @@ export class MeshMerger {
    */
   updateTransform(id: string, transform: Partial<Transform>): void {
     const model = this.models.get(id);
-    if (!model) {
-      throw new Error(`Model with id ${id} not found`);
-    }
+    if (!model) throw new Error(`Model with id ${id} not found`);
 
-    model.transform = mergeTransform({
-      ...model.transform,
-      ...transform,
-    });
+    model.transform = mergeTransform({ ...model.transform, ...transform });
   }
 
   /**
    * Remove a model
    */
   removeModel(id: string): void {
-    if (!this.models.has(id)) {
+    if (!this.models.has(id))
       throw new Error(`Model with id ${id} not found`);
-    }
-
     this.models.delete(id);
   }
 
@@ -101,62 +97,61 @@ export class MeshMerger {
   }
 
   /**
-   * Merge all models
+   * Merge all loaded models into a single mesh with a texture atlas.
+   * Throws if a merge is already in progress.
    */
   async merge(options?: MergeOptions): Promise<void> {
+    if (this.isMerging) {
+      throw new Error("A merge operation is already in progress");
+    }
     if (this.models.size === 0) {
       throw new Error("No models to merge");
     }
 
-    const mergeOptions = this.getMergeOptions(options);
+    this.isMerging = true;
 
-    this.reportProgress("Starting merge", 0);
+    try {
+      const mergeOptions = this.getMergeOptions(options);
 
-    // Get scenes and transforms
-    const modelList = Array.from(this.models.values());
-    const scenes = modelList.map((m) => m.scene);
-    const transforms = modelList.map((m) => m.transform);
+      this.reportProgress("Starting merge", 0);
 
-    // Merge geometries
-    this.reportProgress("Merging geometries", 0.2);
-    const { geometry, materials, materialMapping } = this.geometryMerger.merge(
-      scenes,
-      transforms
-    );
+      const modelList = Array.from(this.models.values());
+      const scenes = modelList.map((m) => m.scene);
+      const transforms = modelList.map((m) => m.transform);
 
-    // Generate texture atlas
-    this.reportProgress("Generating texture atlas", 0.5);
-    const atlasResult = await this.materialAtlas.generate(
-      materials,
-      materialMapping,
-      geometry,
-      {
-        atlasSize: mergeOptions.atlasSize,
-        quality: mergeOptions.textureQuality,
-        atlasMode: mergeOptions.atlasMode as Required<AtlasMode>,
-        materialOverrides: mergeOptions.materialOverrides,
-      }
-    );
+      this.reportProgress("Merging geometries", 0.2);
+      const { geometry, materials, materialMapping } =
+        this.geometryMerger.merge(scenes, transforms);
 
-    // Create merged mesh
-    this.reportProgress("Creating merged mesh", 0.8);
+      this.reportProgress("Generating texture atlas", 0.5);
+      const atlasResult = await this.materialAtlas.generate(
+        materials,
+        materialMapping,
+        geometry,
+        {
+          atlasSize: mergeOptions.atlasSize,
+          quality: mergeOptions.textureQuality,
+          atlasMode: mergeOptions.atlasMode as Required<AtlasMode>,
+          materialOverrides: mergeOptions.materialOverrides,
+        }
+      );
 
-    // Debug: Check if geometry has data
-    console.log("Merged geometry info:", {
-      vertexCount: geometry.attributes.position?.count || 0,
-      hasUV: !!geometry.attributes.uv,
-      hasNormal: !!geometry.attributes.normal,
-      materialCount: materials.length,
-    });
+      this.reportProgress("Creating merged mesh", 0.8);
 
-    this.mergedMesh = new THREE.Mesh(geometry, atlasResult.material);
-    this.mergedMesh.name = "MergedMesh";
+      // Dispose previous GPU resources before replacing them
+      this.disposeMergedResources();
 
-    // Create merged scene
-    this.mergedScene = new THREE.Scene();
-    this.mergedScene.add(this.mergedMesh);
+      this.mergedMesh = new THREE.Mesh(geometry, atlasResult.material);
+      this.mergedMesh.name = "MergedMesh";
+      this.lastAtlasResult = atlasResult;
 
-    this.reportProgress("Merge complete", 1);
+      this.mergedScene = new THREE.Scene();
+      this.mergedScene.add(this.mergedMesh);
+
+      this.reportProgress("Merge complete", 1);
+    } finally {
+      this.isMerging = false;
+    }
   }
 
   /**
@@ -167,35 +162,15 @@ export class MeshMerger {
       throw new Error("No merged model to export. Call merge() first.");
     }
 
-    // Debug: Check merged mesh before export
-    console.log("Export - Merged mesh info:", {
-      hasMesh: !!this.mergedMesh,
-      geometry: this.mergedMesh?.geometry,
-      vertexCount: this.mergedMesh?.geometry?.attributes?.position?.count || 0,
-      material: this.mergedMesh?.material,
-    });
-
-    // Debug: Check scene children
-    console.log("Export - Scene children:", this.mergedScene.children.length);
-    this.mergedScene.traverse((obj) => {
-      console.log("  - Object:", obj.type, obj.name);
-    });
-
     this.reportProgress("Exporting GLB", 0);
 
     return new Promise((resolve, reject) => {
       const exporter = new GLTFExporter();
-
-      // Export the mesh directly instead of the scene
       const objectToExport = this.mergedMesh || this.mergedScene!;
 
       exporter.parse(
         objectToExport,
         (result) => {
-          console.log(
-            "Export result size:",
-            (result as ArrayBuffer).byteLength
-          );
           const blob = new Blob([result as ArrayBuffer], {
             type: "model/gltf-binary",
           });
@@ -203,7 +178,6 @@ export class MeshMerger {
           resolve(blob);
         },
         (error) => {
-          console.error("Export error:", error);
           reject(new Error(`Export failed: ${error}`));
         },
         { binary: true }
@@ -233,17 +207,36 @@ export class MeshMerger {
   }
 
   /**
-   * Clear all models and merged result
+   * Clear all models and dispose GPU resources from the previous merge
    */
   clear(): void {
+    this.disposeMergedResources();
     this.models.clear();
     this.mergedScene = undefined;
     this.mergedMesh = undefined;
+    this.lastAtlasResult = undefined;
   }
 
   /**
-   * Get merge options with defaults
+   * Dispose geometry and textures from the previous merge result
    */
+  private disposeMergedResources(): void {
+    if (this.mergedMesh) {
+      this.mergedMesh.geometry.dispose();
+    }
+
+    if (this.lastAtlasResult) {
+      const r = this.lastAtlasResult;
+      r.albedoAtlas?.dispose();
+      r.normalAtlas?.dispose();
+      r.roughnessAtlas?.dispose();
+      r.metalnessAtlas?.dispose();
+      r.emissiveAtlas?.dispose();
+      r.aoAtlas?.dispose();
+      r.material.dispose();
+    }
+  }
+
   private getMergeOptions(options?: MergeOptions): Required<
     Omit<MergeOptions, "materialOverrides">
   > & {
@@ -270,9 +263,6 @@ export class MeshMerger {
     };
   }
 
-  /**
-   * Report progress
-   */
   private reportProgress(stage: string, progress: number): void {
     if (this.onProgress) {
       this.onProgress(stage, progress);

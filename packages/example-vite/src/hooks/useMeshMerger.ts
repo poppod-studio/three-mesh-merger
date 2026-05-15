@@ -11,12 +11,13 @@ export function useMeshMerger() {
   const mergerRef = useRef<MeshMerger>(new MeshMerger())
   const [models, setModels] = useState<LoadedModel[]>([])
   const [isMerged, setIsMerged] = useState(false)
+  const [isMerging, setIsMerging] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ stage: string; value: number }>({
     stage: '',
     value: 0
   })
 
-  // Setup progress callback
   useEffect(() => {
     mergerRef.current.setProgressCallback((stage, value) => {
       setProgress({ stage, value })
@@ -24,32 +25,21 @@ export function useMeshMerger() {
   }, [])
 
   const addModel = useCallback(async (file: File, transform?: Transform) => {
-    console.log('Adding model:', file.name)
     const id = await mergerRef.current.addModel(file, transform)
 
     const modelData = mergerRef.current.getModel(id)
-    if (!modelData) {
-      console.error('Failed to get model data for:', id)
-      return id
-    }
+    if (!modelData) return id
 
     setModels((prev) => [
       ...prev,
-      {
-        id,
-        name: file.name,
-        transform: modelData.transform
-      }
+      { id, name: file.name, transform: modelData.transform }
     ])
-
     setIsMerged(false)
-    console.log('Model added:', id)
     return id
   }, [])
 
   const updateTransform = useCallback((id: string, transform: Partial<Transform>) => {
     mergerRef.current.updateTransform(id, transform)
-
     setModels((prev) =>
       prev.map((model) =>
         model.id === id
@@ -66,10 +56,16 @@ export function useMeshMerger() {
   }, [])
 
   const merge = useCallback(async (options?: MergeOptions) => {
-    console.log('Starting merge with options:', options)
-    await mergerRef.current.merge(options)
-    setIsMerged(true)
-    console.log('Merge complete')
+    setMergeError(null)
+    setIsMerging(true)
+    try {
+      await mergerRef.current.merge(options)
+      setIsMerged(true)
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : 'Merge failed')
+    } finally {
+      setIsMerging(false)
+    }
   }, [])
 
   const exportGLB = useCallback(async () => {
@@ -86,12 +82,17 @@ export function useMeshMerger() {
     mergerRef.current.clear()
     setModels([])
     setIsMerged(false)
+    setIsMerging(false)
+    setMergeError(null)
+    setProgress({ stage: '', value: 0 })
   }, [])
 
   return {
     merger: mergerRef.current,
     models,
     isMerged,
+    isMerging,
+    mergeError,
     progress,
     addModel,
     updateTransform,
