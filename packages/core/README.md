@@ -304,20 +304,26 @@ const handleMerge = async () => {
 
 ## How It Works
 
-1. **Load Models**: GLB files are loaded using Three.js GLTFLoader
-2. **Apply Transforms**: Each model can be positioned, rotated, and scaled independently
-3. **Geometry Merging**: All geometries are merged into a single BufferGeometry
-4. **Texture Atlas**: Textures are packed into atlases using potpack algorithm
-5. **UV Remapping**: UV coordinates are updated to match atlas layout
-6. **Material Creation**: Single material is created with all atlas textures
-7. **Export**: Final merged model is exported as GLB using Three.js GLTFExporter
+1. **Load Models**: GLB files are loaded using Three.js `GLTFLoader`
+2. **Apply Transforms**: Each model's world matrix is baked first, then the user-defined transform is applied on top
+3. **Geometry Merging**: All geometries (including multi-material meshes) are flattened to non-indexed form and merged into a single `BufferGeometry`; per-material triangle ranges are tracked for UV remapping
+4. **Texture Atlas**: Textures are packed using the [potpack](https://github.com/mapbox/potpack) bin-packing algorithm and composited onto a single canvas per map type
+5. **UV Remapping**: UV coordinates are transformed into each material's atlas tile; tiling UVs (repeat > 1) are wrapped to `[0, 1]` before remapping
+6. **Material Creation**: A single `MeshStandardMaterial` is created with all requested atlas textures; scalar multipliers are set to neutral so they don't re-tint the baked atlas data
+7. **Export**: Final merged model is exported as GLB using Three.js `GLTFExporter`
 
 ## Performance Considerations
 
-- **Atlas Size**: Larger atlas = better quality but more memory
-- **Texture Quality**: Lower quality = smaller file size
-- **Map Selection**: Only enable needed maps to save memory
-- **Model Count**: More models = longer merge time
+- **Atlas Size**: Larger atlas → better quality, more GPU memory (`512` → `4096`)
+- **Texture Quality**: Controls canvas compositing smoothness (`0.1` = low, `1.0` = high)
+- **Map Selection**: Only enable the maps your scene actually uses — each enabled map doubles atlas memory
+- **Model Count**: More models = longer merge time; geometry is processed synchronously on the main thread
+
+## Known Limitations
+
+- **UV tiling is baked, not preserved** — textures using `repeat > 1` have their tiling baked into the atlas UV. The visual result matches the original but the UV range is collapsed to `[0, 1]` in the exported mesh.
+- **Browser / Canvas only** — texture processing relies on `document.createElement('canvas')` and is not compatible with Node.js or server-side rendering.
+- **No morph targets** — morph attributes are stripped during the attribute-normalisation step.
 
 ## Browser Support
 
@@ -337,5 +343,6 @@ MIT © poppod
 
 - [GitHub Repository](https://github.com/poppod56/three-mesh-merger)
 - [npm Package](https://www.npmjs.com/package/@poppod/three-mesh-merger)
+- [Changelog](https://github.com/poppod56/three-mesh-merger/blob/main/CHANGELOG.md)
 - [Example Application](../example-vite)
 - [Three.js Documentation](https://threejs.org/docs)

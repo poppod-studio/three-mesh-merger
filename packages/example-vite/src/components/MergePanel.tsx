@@ -6,7 +6,8 @@ interface MergePanelProps {
   onExport: () => void
   onClear: () => void
   isMerged: boolean
-  disabled?: boolean
+  isMerging: boolean
+  mergeError?: string | null
   progress?: { stage: string; value: number }
 }
 
@@ -15,7 +16,8 @@ export function MergePanel({
   onExport,
   onClear,
   isMerged,
-  disabled,
+  isMerging,
+  mergeError,
   progress
 }: MergePanelProps) {
   const [atlasSize, setAtlasSize] = useState(2048)
@@ -25,20 +27,19 @@ export function MergePanel({
   const [roughness, setRoughness] = useState(false)
   const [metalness, setMetalness] = useState(false)
   const [emissive, setEmissive] = useState(false)
+  const [aoMap, setAoMap] = useState(false)
 
   const handleMerge = () => {
     onMerge({
       atlasSize,
       textureQuality: quality,
-      atlasMode: {
-        albedo,
-        normal,
-        roughness,
-        metalness,
-        emissive
-      }
+      atlasMode: { albedo, normal, roughness, metalness, emissive, aoMap }
     })
   }
+
+  const isActive = isMerging || isMerged
+  const showProgress =
+    isMerging && progress && progress.value > 0 && progress.value < 1
 
   return (
     <div className="merge-panel">
@@ -49,7 +50,7 @@ export function MergePanel({
         <select
           value={atlasSize}
           onChange={(e) => setAtlasSize(Number(e.target.value))}
-          disabled={disabled}
+          disabled={isActive}
         >
           <option value={512}>512</option>
           <option value={1024}>1024</option>
@@ -59,92 +60,83 @@ export function MergePanel({
       </div>
 
       <div className="control-group">
-        <label>Quality ({quality})</label>
+        <label>Quality ({quality.toFixed(1)})</label>
         <input
           type="range"
-          min="0"
+          min="0.1"
           max="1"
           step="0.1"
           value={quality}
           onChange={(e) => setQuality(parseFloat(e.target.value))}
-          disabled={disabled}
+          disabled={isActive}
         />
       </div>
 
       <div className="control-group">
         <label>Texture Maps</label>
         <div className="checkbox-group">
-          <label>
-            <input
-              type="checkbox"
-              checked={albedo}
-              onChange={(e) => setAlbedo(e.target.checked)}
-              disabled={disabled}
-            />
-            Albedo/Color
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={normal}
-              onChange={(e) => setNormal(e.target.checked)}
-              disabled={disabled}
-            />
-            Normal
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={roughness}
-              onChange={(e) => setRoughness(e.target.checked)}
-              disabled={disabled}
-            />
-            Roughness
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={metalness}
-              onChange={(e) => setMetalness(e.target.checked)}
-              disabled={disabled}
-            />
-            Metalness
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={emissive}
-              onChange={(e) => setEmissive(e.target.checked)}
-              disabled={disabled}
-            />
-            Emissive
-          </label>
+          {[
+            { label: 'Albedo / Color', value: albedo, set: setAlbedo },
+            { label: 'Normal', value: normal, set: setNormal },
+            { label: 'Roughness', value: roughness, set: setRoughness },
+            { label: 'Metalness', value: metalness, set: setMetalness },
+            { label: 'Emissive', value: emissive, set: setEmissive },
+            { label: 'Ambient Occlusion (AO)', value: aoMap, set: setAoMap },
+          ].map(({ label, value, set }) => (
+            <label key={label}>
+              <input
+                type="checkbox"
+                checked={value}
+                onChange={(e) => set(e.target.checked)}
+                disabled={isActive}
+              />
+              {label}
+            </label>
+          ))}
         </div>
       </div>
 
-      {progress && progress.value > 0 && progress.value < 1 && (
+      <div className="merge-note">
+        Models with tiling textures (UV repeat &gt; 1) will have tiling baked
+        into the atlas. Visual fidelity may differ from the original.
+      </div>
+
+      {showProgress && (
         <div className="progress">
-          <div className="progress-bar" style={{ width: `${progress.value * 100}%` }} />
-          <span className="progress-text">{progress.stage}</span>
+          <div
+            className="progress-bar"
+            style={{ width: `${progress!.value * 100}%` }}
+          />
+          <span className="progress-text">{progress!.stage}</span>
         </div>
+      )}
+
+      {isMerging && !showProgress && (
+        <div className="merge-spinner">
+          <span className="spinner" /> Merging…
+        </div>
+      )}
+
+      {mergeError && (
+        <div className="merge-error">{mergeError}</div>
       )}
 
       <div className="button-group">
         <button
           className="btn-primary"
           onClick={handleMerge}
-          disabled={disabled || isMerged}
+          disabled={isActive}
         >
-          {isMerged ? 'Merged' : 'Merge Models'}
+          {isMerging ? 'Merging…' : isMerged ? 'Merged' : 'Merge Models'}
         </button>
 
-        {isMerged && (
+        {isMerged && !isMerging && (
           <>
-            <button className="btn-success" onClick={onExport} disabled={disabled}>
+            <button className="btn-success" onClick={onExport}>
               Export GLB
             </button>
             <button className="btn-secondary" onClick={onClear}>
-              Clear & Start Over
+              Clear &amp; Start Over
             </button>
           </>
         )}

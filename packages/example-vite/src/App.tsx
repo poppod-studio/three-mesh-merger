@@ -13,6 +13,8 @@ export function App() {
     merger,
     models,
     isMerged,
+    isMerging,
+    mergeError,
     progress,
     addModel,
     updateTransform,
@@ -99,6 +101,8 @@ export function App() {
               onExport={exportGLB}
               onClear={clear}
               isMerged={isMerged}
+              isMerging={isMerging}
+              mergeError={mergeError}
               progress={progress}
             />
           )}

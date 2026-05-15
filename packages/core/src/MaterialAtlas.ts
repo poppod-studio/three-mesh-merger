@@ -47,25 +47,24 @@ export class MaterialAtlas {
       atlasSize,
     });
 
-    // Verify that all materials are in the mapping
-    materials.forEach((mat, i) => {
-      const hasMapping = materialMapping.has(mat);
-      const triangleCount = materialMapping.get(mat)?.length || 0;
-      console.log(
-        `Material ${i}: hasMapping=${hasMapping}, triangles=${triangleCount}`
-      );
-    });
-
-    // Extract textures by type
     const texturesByType = this.extractTexturesByType(materials, atlasMode);
 
-    // Generate packing layout (same for all atlases)
+    // Use the first available texture type as the reference for packing dimensions.
+    // This ensures correctness even when albedo is disabled.
+    const referenceTextures =
+      texturesByType.albedo ??
+      texturesByType.normal ??
+      texturesByType.roughness ??
+      texturesByType.metalness ??
+      texturesByType.emissive ??
+      texturesByType.aoMap ??
+      [];
+
     const packingLayout = this.generatePackingLayout(
-      texturesByType.albedo || [],
+      referenceTextures,
       atlasSize
     );
 
-    // Create atlases for each enabled map type
     const result: AtlasResult = {
       material: new THREE.MeshStandardMaterial(),
     };
@@ -118,6 +117,7 @@ export class MaterialAtlas {
         quality
       );
       result.material.emissiveMap = result.emissiveAtlas;
+      result.material.emissive = new THREE.Color(1, 1, 1);
     }
 
     if (atlasMode.aoMap && texturesByType.aoMap) {
@@ -130,7 +130,6 @@ export class MaterialAtlas {
       result.material.aoMap = result.aoAtlas;
     }
 
-    // Update UV coordinates
     this.updateUVCoordinates(
       geometry,
       materials,
@@ -139,14 +138,19 @@ export class MaterialAtlas {
       atlasSize
     );
 
-    // Set material properties
     this.setMaterialProperties(result.material, materials, materialOverrides);
+
+    // Atlas maps encode the full texture values — reset scalar multipliers to neutral
+    // so they don't tint or scale the baked atlas data.
+    if (result.albedoAtlas) result.material.color.set(1, 1, 1);
+    if (result.roughnessAtlas) result.material.roughness = 1.0;
+    if (result.metalnessAtlas) result.material.metalness = 1.0;
 
     return result;
   }
 
   /**
-   * Extract textures from materials by type
+   * Extract textures from materials by type, using solid-color fallbacks where needed
    */
   private extractTexturesByType(
     materials: THREE.Material[],
@@ -224,105 +228,93 @@ export class MaterialAtlas {
   }
 
   /**
-   * Generate packing layout using potpack
+   * Generate packing layout using potpack, scaled to fit atlasSize
    */
   private generatePackingLayout(
     textures: THREE.Texture[],
     atlasSize: number
   ): PackBox[] {
-    const boxes: PackBox[] = textures.map((texture, index) => {
+    const boxes: PackBox[] = textures.map((texture) => {
       const image = texture.image as HTMLImageElement | HTMLCanvasElement;
       const w = image.width || 256;
       const h = image.height || 256;
-      console.log(`Texture ${index} original size:`, { w, h });
       return { w, h };
     });
 
     const { w, h } = potpack(boxes);
-    console.log("Potpack result:", { w, h });
 
-    // Scale to fit atlas size
-    const scale = Math.min(atlasSize / w, atlasSize / h);
-    console.log("Scale factor:", scale);
+    const scale = w > 0 && h > 0 ? Math.min(atlasSize / w, atlasSize / h) : 1;
 
-    boxes.forEach((box, index) => {
-      const originalW = box.w;
-      const originalH = box.h;
+    boxes.forEach((box) => {
       box.w = Math.floor(box.w * scale);
       box.h = Math.floor(box.h * scale);
       box.x = Math.floor((box.x || 0) * scale);
       box.y = Math.floor((box.y || 0) * scale);
-      console.log(`Box ${index} after scale:`, {
-        original: { w: originalW, h: originalH },
-        scaled: { x: box.x, y: box.y, w: box.w, h: box.h },
-      });
     });
 
     return boxes;
   }
 
   /**
-   * Create atlas texture from packed textures
+   * Composite textures into a single atlas canvas at the packed positions
    */
   private async createAtlas(
     textures: THREE.Texture[],
     layout: PackBox[],
     atlasSize: number,
-    _quality: number
+    quality: number
   ): Promise<THREE.Texture> {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
-    if (!ctx) {
-      throw new Error("Failed to get 2D context");
-    }
+    if (!ctx) throw new Error("Failed to get 2D context");
 
     canvas.width = atlasSize;
     canvas.height = atlasSize;
 
-    // Clear canvas
-    ctx.fillStyle = "rgba(0, 0, 0, 0)";
-    ctx.fillRect(0, 0, atlasSize, atlasSize);
+    ctx.clearRect(0, 0, atlasSize, atlasSize);
 
-    // Draw each texture to packed position
-    // Using canvas coordinate system (Y=0 at top)
+    // Apply quality-driven smoothing for the atlas compositing step
+    ctx.imageSmoothingEnabled = quality > 0;
+    ctx.imageSmoothingQuality =
+      quality >= 0.9 ? "high" : quality >= 0.5 ? "medium" : "low";
+
     textures.forEach((texture, index) => {
       const box = layout[index];
-      if (box.x === undefined || box.y === undefined) return;
+      if (box === undefined || box.x === undefined || box.y === undefined)
+        return;
 
-      // Skip if texture image is not loaded or invalid
       const image = texture.image;
       if (!image || !image.width || !image.height) {
-        console.warn("Skipping texture with invalid image");
+        console.warn(`Skipping texture ${index}: invalid image`);
         return;
       }
 
       const sourceCanvas = textureToCanvas(texture);
-
-      // Skip if source canvas has no dimensions
       if (sourceCanvas.width === 0 || sourceCanvas.height === 0) {
-        console.warn("Skipping texture with zero-size canvas");
+        console.warn(`Skipping texture ${index}: zero-size canvas`);
         return;
       }
 
       const resized = resizeCanvas(sourceCanvas, box.w, box.h);
-
-      // Draw at the packed position (no flip needed - we'll use flipY=false on texture)
       ctx.drawImage(resized, box.x, box.y);
     });
 
-    // Convert to texture
     const atlasTexture = canvasToTexture(canvas);
     atlasTexture.colorSpace = THREE.SRGBColorSpace;
     atlasTexture.generateMipmaps = true;
-    // Use flipY=false so UV coordinates match canvas coordinates directly
+    // Canvas coordinates match UV directly when flipY=false
     atlasTexture.flipY = false;
 
     return atlasTexture;
   }
 
   /**
-   * Update UV coordinates to match atlas layout
+   * Remap UV coordinates from per-material space into atlas space.
+   *
+   * UV tiling (values outside [0,1]) is wrapped before remapping so the
+   * transform stays within this material's atlas tile rather than bleeding
+   * into adjacent tiles.
    */
   private updateUVCoordinates(
     geometry: THREE.BufferGeometry,
@@ -340,50 +332,33 @@ export class MaterialAtlas {
 
     const uvArray = uvAttribute.array as Float32Array;
 
-    console.log("UV remapping debug:", {
-      totalUVs: uvArray.length / 2,
-      materialsCount: materials.length,
-      layoutCount: layout.length,
-    });
-
     materials.forEach((material, materialIndex) => {
       const triangleIndices = materialMapping.get(material);
-      if (!triangleIndices) {
-        console.log(`Material ${materialIndex}: no triangle indices`);
-        return;
-      }
+      if (!triangleIndices) return;
 
       const box = layout[materialIndex];
-      if (box.x === undefined || box.y === undefined) {
-        console.log(`Material ${materialIndex}: no box position`);
-        return;
-      }
+      if (!box || box.x === undefined || box.y === undefined) return;
 
-      console.log(`Material ${materialIndex}:`, {
-        triangleCount: triangleIndices.length,
-        box: { x: box.x, y: box.y, w: box.w, h: box.h },
-      });
-
-      // Calculate UV transform
-      // With flipY=false on texture, UV coordinates match canvas coordinates directly
-      // UV (0,0) = top-left of texture, same as canvas
       const scaleX = box.w / atlasSize;
       const scaleY = box.h / atlasSize;
       const offsetX = box.x / atlasSize;
       const offsetY = box.y / atlasSize;
 
-      // Update UVs for each triangle (3 vertices per triangle)
       triangleIndices.forEach((triangleIndex) => {
-        // Each triangle has 3 vertices
         for (let i = 0; i < 3; i++) {
           const vertexIndex = triangleIndex * 3 + i;
           const uvIndex = vertexIndex * 2;
 
-          if (uvIndex + 1 < uvArray.length) {
-            // Transform UV: new_uv = (old_uv * scale) + offset
-            uvArray[uvIndex] = uvArray[uvIndex] * scaleX + offsetX;
-            uvArray[uvIndex + 1] = uvArray[uvIndex + 1] * scaleY + offsetY;
-          }
+          if (uvIndex + 1 >= uvArray.length) continue;
+
+          // Wrap tiling UVs into [0, 1] before mapping into the atlas tile.
+          // Without this, UV values > 1 (from texture repeat) would sample
+          // into neighbouring atlas tiles and produce texture bleeding.
+          const u = ((uvArray[uvIndex] % 1) + 1) % 1;
+          const v = ((uvArray[uvIndex + 1] % 1) + 1) % 1;
+
+          uvArray[uvIndex] = u * scaleX + offsetX;
+          uvArray[uvIndex + 1] = v * scaleY + offsetY;
         }
       });
     });
@@ -392,7 +367,9 @@ export class MaterialAtlas {
   }
 
   /**
-   * Set material properties (average or override)
+   * Set material scalar properties (averaged from sources, or from overrides).
+   * Note: scalar color/roughness/metalness are reset to neutral in generate()
+   * whenever the corresponding atlas map is present.
    */
   private setMaterialProperties(
     targetMaterial: THREE.MeshStandardMaterial,
@@ -400,24 +377,17 @@ export class MaterialAtlas {
     overrides?: MaterialOverrides
   ): void {
     if (overrides) {
-      // Apply overrides
-      if (overrides.roughness !== undefined) {
+      if (overrides.roughness !== undefined)
         targetMaterial.roughness = overrides.roughness;
-      }
-      if (overrides.metalness !== undefined) {
+      if (overrides.metalness !== undefined)
         targetMaterial.metalness = overrides.metalness;
-      }
-      if (overrides.color !== undefined) {
+      if (overrides.color !== undefined)
         targetMaterial.color = new THREE.Color(overrides.color);
-      }
-      if (overrides.emissive !== undefined) {
+      if (overrides.emissive !== undefined)
         targetMaterial.emissive = new THREE.Color(overrides.emissive);
-      }
-      if (overrides.emissiveIntensity !== undefined) {
+      if (overrides.emissiveIntensity !== undefined)
         targetMaterial.emissiveIntensity = overrides.emissiveIntensity;
-      }
     } else {
-      // Calculate average values
       let totalRoughness = 0;
       let totalMetalness = 0;
       const avgColor = new THREE.Color(0, 0, 0);
