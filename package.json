@@ -9,10 +9,23 @@
     "build:core": "pnpm --filter @poppod/three-mesh-merger build",
     "build:example": "pnpm --filter example-vite build"
   },
-  "keywords": ["three.js", "3d", "mesh", "merge", "glb", "texture-atlas"],
+  "keywords": [
+    "three.js",
+    "3d",
+    "mesh",
+    "merge",
+    "glb",
+    "texture-atlas"
+  ],
   "author": "poppod",
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "lodash": ">=4.18.0",
+      "minimatch@<3.1.2": "^3.1.2"
+    }
   }
 }
