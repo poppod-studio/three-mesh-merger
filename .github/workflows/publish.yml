@@ -79,7 +79,7 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://npm.pkg.github.com'
-          scope: '@poppod56'
+          scope: '@poppod-studio'
 
       - uses: actions/download-artifact@v4
         with:
@@ -89,7 +89,7 @@ jobs:
       - name: Publish to GitHub Packages
         working-directory: packages/core
         run: |
-          npm pkg set name='@poppod56/three-mesh-merger'
+          npm pkg set name='@poppod-studio/three-mesh-merger'
           npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
