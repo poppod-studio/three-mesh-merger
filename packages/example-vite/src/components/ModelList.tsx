@@ -10,11 +10,15 @@ interface ModelListProps {
   disabled?: boolean;
 }
 
-// Helper to safely parse float, returning current value if invalid
 const safeParseFloat = (value: string, fallback: number): number => {
   const parsed = parseFloat(value);
   return isNaN(parsed) ? fallback : parsed;
 };
+
+const radToDeg = (r: number) =>
+  Math.round((r * (180 / Math.PI)) * 10) / 10;
+
+const degToRad = (d: number) => d * (Math.PI / 180);
 
 export function ModelList({
   models,
@@ -52,6 +56,7 @@ export function ModelList({
                 onRemove(model.id);
               }}
               disabled={disabled}
+              title="Remove (Delete)"
             >
               ×
             </button>
@@ -62,7 +67,7 @@ export function ModelList({
               <div className="control-group">
                 <label>Position</label>
                 <div className="control-row">
-                  {["x", "y", "z"].map((axis, i) => (
+                  {["X", "Y", "Z"].map((axis, i) => (
                     <input
                       key={axis}
                       type="number"
@@ -76,30 +81,34 @@ export function ModelList({
                         })
                       }
                       disabled={disabled}
-                      placeholder={axis.toUpperCase()}
+                      placeholder={axis}
                     />
                   ))}
                 </div>
               </div>
 
               <div className="control-group">
-                <label>Rotation (rad)</label>
+                <label>Rotation (deg)</label>
                 <div className="control-row">
-                  {["x", "y", "z"].map((axis, i) => (
+                  {["X", "Y", "Z"].map((axis, i) => (
                     <input
                       key={axis}
                       type="number"
-                      step="0.1"
-                      value={model.transform.rotation[i]}
-                      onChange={(e) =>
+                      step="1"
+                      value={radToDeg(model.transform.rotation[i])}
+                      onChange={(e) => {
+                        const deg = safeParseFloat(
+                          e.target.value,
+                          radToDeg(model.transform.rotation[i])
+                        );
                         onTransformChange(model.id, {
                           rotation: model.transform.rotation.map((v, j) =>
-                            j === i ? safeParseFloat(e.target.value, v) : v
+                            j === i ? degToRad(deg) : v
                           ) as [number, number, number],
-                        })
-                      }
+                        });
+                      }}
                       disabled={disabled}
-                      placeholder={axis.toUpperCase()}
+                      placeholder={axis}
                     />
                   ))}
                 </div>
@@ -108,7 +117,7 @@ export function ModelList({
               <div className="control-group">
                 <label>Scale</label>
                 <div className="control-row">
-                  {["x", "y", "z"].map((axis, i) => (
+                  {["X", "Y", "Z"].map((axis, i) => (
                     <input
                       key={axis}
                       type="number"
@@ -122,7 +131,7 @@ export function ModelList({
                         })
                       }
                       disabled={disabled}
-                      placeholder={axis.toUpperCase()}
+                      placeholder={axis}
                     />
                   ))}
                 </div>

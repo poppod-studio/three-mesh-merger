@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { MeshMerger, Transform, MergeOptions } from '@poppod/three-mesh-merger'
+// Draco-compressed GLB support: decoder files are served from /draco/ (see public/draco/)
 
 export interface LoadedModel {
   id: string
@@ -8,7 +9,7 @@ export interface LoadedModel {
 }
 
 export function useMeshMerger() {
-  const mergerRef = useRef<MeshMerger>(new MeshMerger())
+  const mergerRef = useRef<MeshMerger>(new MeshMerger({ dracoDecoderPath: '/draco/' }))
   const [models, setModels] = useState<LoadedModel[]>([])
   const [isMerged, setIsMerged] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
