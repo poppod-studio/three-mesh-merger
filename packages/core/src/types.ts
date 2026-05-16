@@ -86,3 +86,15 @@ export interface AtlasResult {
  * Material to triangle indices mapping
  */
 export type MaterialMapping = Map<THREE.Material, number[]>
+
+/**
+ * MeshMerger constructor options
+ */
+export interface MeshMergerOptions {
+  /**
+   * Path to the Draco decoder directory (must contain draco_decoder.wasm etc.).
+   * Required to load Draco-compressed GLB/GLTF files.
+   * Example: '/draco/'
+   */
+  dracoDecoderPath?: string
+}

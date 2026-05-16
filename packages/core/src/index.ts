@@ -8,5 +8,6 @@ export type {
   AtlasMode,
   MaterialOverrides,
   MergeOptions,
+  MeshMergerOptions,
   ProgressCallback
 } from './types'

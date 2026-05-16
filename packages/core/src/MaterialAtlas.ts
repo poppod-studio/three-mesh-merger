@@ -74,7 +74,8 @@ export class MaterialAtlas {
         texturesByType.albedo,
         packingLayout,
         atlasSize,
-        quality
+        quality,
+        true // sRGB — perceptual color data
       );
       result.material.map = result.albedoAtlas;
     }
@@ -85,6 +86,7 @@ export class MaterialAtlas {
         packingLayout,
         atlasSize,
         quality
+        // linear — direction vectors, not color
       );
       result.material.normalMap = result.normalAtlas;
     }
@@ -95,6 +97,7 @@ export class MaterialAtlas {
         packingLayout,
         atlasSize,
         quality
+        // linear — scalar roughness values
       );
       result.material.roughnessMap = result.roughnessAtlas;
     }
@@ -105,6 +108,7 @@ export class MaterialAtlas {
         packingLayout,
         atlasSize,
         quality
+        // linear — scalar metalness values
       );
       result.material.metalnessMap = result.metalnessAtlas;
     }
@@ -114,7 +118,8 @@ export class MaterialAtlas {
         texturesByType.emissive,
         packingLayout,
         atlasSize,
-        quality
+        quality,
+        true // sRGB — perceptual color data
       );
       result.material.emissiveMap = result.emissiveAtlas;
       result.material.emissive = new THREE.Color(1, 1, 1);
@@ -262,7 +267,8 @@ export class MaterialAtlas {
     textures: THREE.Texture[],
     layout: PackBox[],
     atlasSize: number,
-    quality: number
+    quality: number,
+    isColorMap = false
   ): Promise<THREE.Texture> {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
@@ -301,7 +307,12 @@ export class MaterialAtlas {
     });
 
     const atlasTexture = canvasToTexture(canvas);
-    atlasTexture.colorSpace = THREE.SRGBColorSpace;
+    // Albedo and emissive are perceptual (sRGB). All other maps — normal,
+    // roughness, metalness, aoMap — store linear data and must NOT be decoded
+    // as sRGB, otherwise THREE.js mis-interprets the channel values.
+    atlasTexture.colorSpace = isColorMap
+      ? THREE.SRGBColorSpace
+      : THREE.LinearSRGBColorSpace;
     atlasTexture.generateMipmaps = true;
     // Canvas coordinates match UV directly when flipY=false
     atlasTexture.flipY = false;

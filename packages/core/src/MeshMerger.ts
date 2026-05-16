@@ -7,6 +7,7 @@ import type {
   Transform,
   ModelInstance,
   MergeOptions,
+  MeshMergerOptions,
   ProgressCallback,
   AtlasMode,
   MaterialOverrides,
@@ -28,8 +29,8 @@ export class MeshMerger {
   private lastAtlasResult?: AtlasResult;
   private isMerging = false;
 
-  constructor() {
-    this.modelLoader = new ModelLoader();
+  constructor(options?: MeshMergerOptions) {
+    this.modelLoader = new ModelLoader(options?.dracoDecoderPath);
     this.geometryMerger = new GeometryMerger();
     this.materialAtlas = new MaterialAtlas();
   }

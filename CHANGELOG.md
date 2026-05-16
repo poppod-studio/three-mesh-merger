@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-17
+
+### Added
+
+- **Draco compression support** — `MeshMerger` now accepts a `dracoDecoderPath`
+  option in its constructor (e.g. `new MeshMerger({ dracoDecoderPath: '/draco/' })`).
+  Pass the path where your Draco WASM decoder files are served to enable loading
+  of Draco-compressed GLB/GLTF files. Without this option behaviour is unchanged.
+  `MeshMergerOptions` is exported from the package for typed configuration.
+
+- **Viewport keyboard shortcuts** — `W` / `E` / `R` switch transform mode
+  (move / rotate / scale); `F` focuses the selected model in the camera, or all
+  models if none is selected; `Delete` / `Backspace` removes the selected model;
+  `Escape` clears the selection. Shortcuts are suppressed when an input field has
+  focus.
+
+- **Drag-and-drop onto the viewport** — `.glb` and `.gltf` files can be dropped
+  directly onto the 3D canvas in addition to the file-picker button. A highlight
+  overlay appears while dragging over the viewport. Drop is ignored after a merge.
+
+- **Auto-focus on model load** — the camera automatically fits to show all loaded
+  models whenever a new model is added. The fit is deferred until the model's
+  scene object is present in the render tree.
+
+- **Viewport orientation cube** — a `GizmoViewcube` (`@react-three/drei`) is
+  displayed in the top-right corner of the viewport for quick camera orientation
+  reference.
+
+- **Floating transform toolbar** — a compact Move / Rotate / Scale toolbar is
+  overlaid on the bottom-left of the viewport while models are loaded and not yet
+  merged, replacing the sidebar `TransformModeSelector` component.
+
+- **Viewport empty state** — when no models are loaded a centred prompt is
+  displayed: "Drop a .glb / .gltf file here" with a pointer to the Sample Models
+  panel.
+
+- **Viewport controls hint bar** — a persistent pill at the bottom of the
+  viewport shows Orbit / Zoom / Pan shortcuts. When models are loaded and not
+  merged, `F: Focus` and `Del: Remove` hints are also shown.
+
+### Changed
+
+- **Rotation inputs display degrees** — the model list previously showed raw
+  radian values; inputs now convert to/from degrees (step 1°) for a friendlier
+  editing experience. Internal storage and the `Transform` type remain in radians.
+
+- **CI pipeline split into parallel jobs** — the publish workflow now runs
+  `build`, `publish-npm`, and `publish-github-packages` as separate jobs that
+  share a build artifact via `actions/upload-artifact`; upgraded to Node.js 24
+  and pnpm v9.
+
 ## [0.1.3] - 2026-05-15
 
 ### Fixed
@@ -47,6 +98,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ctx.imageSmoothingQuality` (`low / medium / high`) during atlas canvas
   compositing. Previously the parameter was accepted but had no effect.
 
+- **Incorrect color space on non-albedo atlases** — normal, roughness, metalness,
+  and AO atlases were previously assigned `SRGBColorSpace`, causing THREE.js to
+  apply sRGB decoding to linear data during sampling (incorrect surface
+  appearance). These atlases now use `LinearSRGBColorSpace`; only albedo and
+  emissive atlases remain `SRGBColorSpace`.
+
 ### Changed
 
 - `clear()` now disposes all GPU resources (geometry, atlas textures, merged
@@ -75,6 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, per-model transform controls, and merge/export panel.
 - Dual-format build output (ESM + CJS) with TypeScript declarations.
 
-[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/poppod56/three-mesh-merger/releases/tag/v0.1.2

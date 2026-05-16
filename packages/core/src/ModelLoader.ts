@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 
 /**
  * Handles loading of GLB/GLTF files
@@ -7,8 +8,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 export class ModelLoader {
   private loader: GLTFLoader
 
-  constructor() {
+  constructor(dracoDecoderPath?: string) {
     this.loader = new GLTFLoader()
+
+    if (dracoDecoderPath) {
+      const dracoLoader = new DRACOLoader()
+      dracoLoader.setDecoderPath(dracoDecoderPath)
+      this.loader.setDRACOLoader(dracoLoader)
+    }
   }
 
   /**
