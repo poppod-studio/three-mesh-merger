@@ -1,6 +1,6 @@
 {
   "name": "@poppod/three-mesh-merger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript library for merging multiple 3D GLB files with texture atlas support",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -52,7 +52,7 @@
     "@types/three": "^0.160.0",
     "three": "^0.160.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.0",
-    "vite-plugin-dts": "^3.7.0"
+    "vite": "^6.4.2",
+    "vite-plugin-dts": "^4.0.0"
   }
 }

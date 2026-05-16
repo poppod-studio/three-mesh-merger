@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-17
+
+### Security
+
+- **Vite upgraded to 6.4.2 (GHSA-4w7w-66w2-5vf9 / CVE-2026-39365, Medium)** — `vite` dev
+  dependency bumped from `^5` to `^6.4.2` to patch a path-traversal vulnerability in the
+  dev server's optimised-deps `.map` handler; only affected servers explicitly exposed to the
+  network via `--host`. `vite-plugin-dts` updated to `^4.0.0` for Vite 6 compatibility.
+
+- **lodash transitive dependency forced to ≥ 4.18.0 (GHSA-r5fr-rjxr-66jc / CVE-2026-4800,
+  High; GHSA-f23m-r3pf-42rh / CVE-2026-2950, Medium)** — A `pnpm.overrides` entry pins any
+  transitive `lodash` to `>=4.18.0`, patching Code Injection via `_.template` imports key
+  names and Prototype Pollution via array path bypass in `_.unset`/`_.omit`. The Vite 6
+  upgrade eliminates `lodash` from the dependency tree entirely.
+
+- **minimatch transitive dependency updated to 10.2.3 (GHSA-7r86-cg39-jmmj,
+  GHSA-23c5-xmqv-rm74, GHSA-3ppc-4f35-3m26, High)** — A `pnpm.overrides` entry forces
+  `minimatch` below `3.1.2` up to the patched version; the resolved version is now `10.2.3`,
+  mitigating three ReDoS vulnerabilities via GLOBSTAR combinatorial backtracking, nested
+  extglobs, and repeated wildcard patterns.
+
 ## [0.2.0] - 2026-05-17
 
 ### Added
@@ -132,7 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, per-model transform controls, and merge/export panel.
 - Dual-format build output (ESM + CJS) with TypeScript declarations.
 
-[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/poppod56/three-mesh-merger/releases/tag/v0.1.2
