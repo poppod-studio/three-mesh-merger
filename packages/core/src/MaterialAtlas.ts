@@ -145,6 +145,10 @@ export class MaterialAtlas {
 
     this.setMaterialProperties(result.material, materials, materialOverrides);
 
+    // Configure alpha cutout (and double-sided) based on the source materials.
+    // Requires the albedo atlas to carry the alpha channel.
+    this.applyTransparency(result.material, materials, materialOverrides);
+
     // Atlas maps encode the full texture values — reset scalar multipliers to neutral
     // so they don't tint or scale the baked atlas data.
     if (result.albedoAtlas) result.material.color.set(1, 1, 1);
@@ -423,6 +427,78 @@ export class MaterialAtlas {
         avgColor.g / count,
         avgColor.b / count
       );
+    }
+
+    targetMaterial.needsUpdate = true;
+  }
+
+  /**
+   * Configure alpha cutout and face culling on the merged material.
+   *
+   * Transparency is a per-material flag, but the merge collapses every source
+   * into a single material. Alpha *cutout* (`alphaTest`) is therefore used
+   * instead of alpha blending: it works per-pixel via the albedo atlas alpha
+   * channel and needs no depth sorting, so a single draw call stays correct.
+   *
+   * Behaviour (when not overridden):
+   * - The cutout threshold is the maximum `alphaTest` across source materials
+   *   (i.e. glTF `alphaMode: MASK` cutoffs). Opaque sources have alpha = 1 in
+   *   the atlas, so they always pass the test and render unchanged.
+   * - If a source used alpha *blending* (glTF `alphaMode: BLEND`) it is
+   *   downgraded to a cutout with a sensible default, since blending cannot be
+   *   sorted within one mesh.
+   * - Double-sided rendering is enabled if any source is double-sided.
+   *
+   * Limitations: only alpha embedded in the albedo/baseColor alpha channel is
+   * honoured. A separate `alphaMap` texture and smooth alpha blending are not
+   * supported. Requires `atlasMode.albedo` (the default).
+   */
+  private applyTransparency(
+    targetMaterial: THREE.MeshStandardMaterial,
+    sourceMaterials: THREE.Material[],
+    overrides?: MaterialOverrides
+  ): void {
+    if (overrides?.transparent !== undefined) {
+      targetMaterial.transparent = overrides.transparent;
+      if (overrides.opacity !== undefined)
+        targetMaterial.opacity = overrides.opacity;
+    }
+
+    if (overrides?.alphaTest !== undefined) {
+      targetMaterial.alphaTest = overrides.alphaTest;
+    } else {
+      let maxAlphaTest = 0;
+      let anyTransparent = false;
+
+      sourceMaterials.forEach((m) => {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (typeof mat.alphaTest === "number" && mat.alphaTest > maxAlphaTest) {
+          maxAlphaTest = mat.alphaTest;
+        }
+        if (mat.transparent) anyTransparent = true;
+      });
+
+      if (maxAlphaTest > 0) {
+        targetMaterial.alphaTest = maxAlphaTest;
+      } else if (anyTransparent) {
+        console.warn(
+          "MaterialAtlas: a source material uses alpha blending; the merged " +
+            "single-material mesh cannot sort transparent triangles, so it is " +
+            "downgraded to alpha cutout (alphaTest=0.5). Pass " +
+            "materialOverrides.alphaTest to tune the threshold."
+        );
+        targetMaterial.alphaTest = 0.5;
+      }
+    }
+
+    if (overrides?.side !== undefined) {
+      targetMaterial.side = overrides.side;
+    } else if (
+      sourceMaterials.some(
+        (m) => (m as THREE.MeshStandardMaterial).side === THREE.DoubleSide
+      )
+    ) {
+      targetMaterial.side = THREE.DoubleSide;
     }
 
     targetMaterial.needsUpdate = true;

@@ -18,6 +18,7 @@ A powerful TypeScript library for merging multiple 3D GLB files into a single op
   - Emissive maps
   - AO maps
 - ⚡ **Optimized Output** - Single mesh with single material for maximum performance
+- 🍃 **Alpha Cutout** - Preserves `alphaMode: MASK` transparency (foliage, decals) when merging
 - 🎨 **Material Customization** - Override material properties or use averaged values
 - 📦 **Client-Side Only** - Lightweight, browser-native implementation
 - 🌳 **Tree-Shakeable** - Optimized for modern bundlers
@@ -237,6 +238,10 @@ interface MaterialOverrides {
   color?: number | string; // THREE.Color compatible
   emissive?: number | string;
   emissiveIntensity?: number;
+  alphaTest?: number; // Alpha-cutout threshold (auto-derived if omitted)
+  transparent?: boolean; // Force alpha blending (not recommended — see below)
+  opacity?: number; // Only meaningful with transparent: true
+  side?: THREE.Side; // Override face culling (auto double-sided otherwise)
 }
 ```
 
@@ -309,7 +314,7 @@ const handleMerge = async () => {
 3. **Geometry Merging**: All geometries (including multi-material meshes) are flattened to non-indexed form and merged into a single `BufferGeometry`; per-material triangle ranges are tracked for UV remapping
 4. **Texture Atlas**: Textures are packed using the [potpack](https://github.com/mapbox/potpack) bin-packing algorithm and composited onto a single canvas per map type
 5. **UV Remapping**: UV coordinates are transformed into each material's atlas tile; tiling UVs (repeat > 1) are wrapped to `[0, 1]` before remapping
-6. **Material Creation**: A single `MeshStandardMaterial` is created with all requested atlas textures; scalar multipliers are set to neutral so they don't re-tint the baked atlas data
+6. **Material Creation**: A single `MeshStandardMaterial` is created with all requested atlas textures; scalar multipliers are set to neutral so they don't re-tint the baked atlas data. Alpha cutout (`alphaTest`) and double-sided rendering are propagated from the source materials — see [Alpha / Transparency](#alpha--transparency)
 7. **Export**: Final merged model is exported as GLB using Three.js `GLTFExporter`
 
 ## Performance Considerations
@@ -319,11 +324,61 @@ const handleMerge = async () => {
 - **Map Selection**: Only enable the maps your scene actually uses — each enabled map doubles atlas memory
 - **Model Count**: More models = longer merge time; geometry is processed synchronously on the main thread
 
+## Alpha / Transparency
+
+The merger collapses every source model into a **single material**. Because
+alpha blending is a per-material flag and cannot be depth-sorted within one
+mesh, transparency is supported via **alpha cutout** (`alphaTest`) rather than
+smooth blending.
+
+### How it behaves
+
+- Alpha stored in a model's **albedo / baseColor alpha channel** is baked into
+  the albedo atlas and preserved.
+- The merged material's cutout threshold is taken **automatically** from the
+  source materials — specifically the maximum `alphaTest` among them (this is
+  what `GLTFLoader` sets for glTF `alphaMode: MASK`). Override it with
+  `materialOverrides.alphaTest`.
+- **Opaque models are unaffected.** Their atlas tiles have alpha = 1, so they
+  always pass the cutout test and render solid — even when merged alongside a
+  cutout model.
+- **Double-sided** rendering is auto-enabled if any source material is
+  double-sided (common for foliage). Override with `materialOverrides.side`.
+- A merged mesh with `alphaTest` exports back to GLB as `alphaMode: MASK` and
+  reloads correctly in any Three.js / glTF viewer.
+
+### Example: opaque base + cutout leaves
+
+```typescript
+await merger.addModel("/models/base.glb"); // alphaMode: OPAQUE
+await merger.addModel("/models/leaf.glb"); // alphaMode: MASK, cutoff 0.78
+
+await merger.merge({
+  atlasMode: { albedo: true }, // albedo atlas carries the alpha channel
+});
+// → single mesh: base renders solid, leaf renders with hard-edged cutouts.
+//   materialOverrides.alphaTest can override the auto-derived 0.78 cutoff.
+```
+
+### Limitations of alpha support
+
+- **Cutout only — no smooth blending.** Edges are hard (binary on/off), not
+  feathered. A source using `alphaMode: BLEND` is downgraded to a cutout (with
+  a warning). True blended transparency (e.g. glass) is not supported in a
+  single-material merge.
+- **Albedo alpha channel only.** A separate `alphaMap` texture is not composited
+  into the atlas; alpha must live in the baseColor/albedo alpha channel.
+- **Requires the albedo atlas** (`atlasMode.albedo`, on by default). With albedo
+  disabled there is no alpha channel to test against.
+- **Possible edge seams at distance.** Mipmaps can blend tile-edge alpha toward
+  the transparent atlas gutter, producing thin seams on far-away cutout meshes.
+
 ## Known Limitations
 
 - **UV tiling is baked, not preserved** — textures using `repeat > 1` have their tiling baked into the atlas UV. The visual result matches the original but the UV range is collapsed to `[0, 1]` in the exported mesh.
 - **Browser / Canvas only** — texture processing relies on `document.createElement('canvas')` and is not compatible with Node.js or server-side rendering.
 - **No morph targets** — morph attributes are stripped during the attribute-normalisation step.
+- **Transparency is cutout-only** — see [Alpha / Transparency](#alpha--transparency) above; smooth alpha blending and separate `alphaMap` textures are not supported.
 
 ## Browser Support
 

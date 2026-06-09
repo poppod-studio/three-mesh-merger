@@ -40,6 +40,27 @@ export interface MaterialOverrides {
   color?: number | string // THREE.Color compatible
   emissive?: number | string
   emissiveIntensity?: number
+  /**
+   * Alpha-cutout threshold for the merged material (THREE `alphaTest`).
+   * Pixels in the albedo atlas with alpha below this value are discarded.
+   * If omitted, the value is derived automatically from the source materials
+   * (see "Alpha / Transparency" in the README).
+   */
+  alphaTest?: number
+  /**
+   * Force alpha blending on the merged material. Not recommended — the merge
+   * produces a single mesh which cannot depth-sort overlapping transparent
+   * triangles. Prefer leaving this unset so alpha cutout is used instead.
+   */
+  transparent?: boolean
+  /** Opacity for the merged material, only meaningful with `transparent: true`. */
+  opacity?: number
+  /**
+   * Override which faces are rendered (`THREE.FrontSide` / `THREE.BackSide` /
+   * `THREE.DoubleSide`). If omitted, double-sided rendering is auto-enabled
+   * when any source material is double-sided (common for foliage/cutout).
+   */
+  side?: THREE.Side
 }
 
 /**

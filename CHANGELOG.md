@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-09
+
+### Added
+
+- **Alpha cutout (transparency) support** — merging now preserves `alphaMode: MASK`
+  transparency. The cutout threshold (`alphaTest`) is derived automatically from the
+  source materials and baked into the merged material via the albedo atlas alpha
+  channel, so cutout models (foliage, decals) keep their holes while opaque models
+  merged alongside them are unaffected. Double-sided rendering is also propagated from
+  the sources. New `alphaTest`, `transparent`, `opacity` and `side` fields on
+  `MaterialOverrides` allow manual control. The merged mesh exports back to GLB as
+  `alphaMode: MASK`. Note: this is cutout only — smooth alpha blending and separate
+  `alphaMap` textures are not supported in a single-material merge.
+
 ## [0.2.1] - 2026-05-17
 
 ### Security
@@ -153,7 +167,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, per-model transform controls, and merge/export panel.
 - Dual-format build output (ESM + CJS) with TypeScript declarations.
 
-[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.2...v0.1.3
