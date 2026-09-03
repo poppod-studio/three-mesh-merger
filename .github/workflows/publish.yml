@@ -51,7 +51,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: core-dist
           path: packages/core/dist
@@ -81,7 +81,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@poppod-studio'
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: core-dist
           path: packages/core/dist
