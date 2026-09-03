@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-03
+
+### Security
+
+- **Transitive dev-dependency vulnerabilities patched** — `pnpm.overrides` added for
+  `fast-uri` (≥3.1.6), `brace-expansion` (≥2.1.4), `nanoid` (≥3.3.18), `postcss`
+  (≥8.5.18), `vite` (≥6.4.3), `@babel/core` (≥7.29.6), and `browserslist` (≥4.28.7),
+  each pinned within its existing major to avoid breaking changes. These affect the
+  build/dev toolchain only — no runtime dependency of the published package changed.
+- Removed stray `package-lock.json` files (repo root, `packages/core`,
+  `packages/example-vite`) left over from before the pnpm workspace migration; they
+  were unused by any install/build/CI step but were still being scanned by Dependabot,
+  producing duplicate alerts against a lockfile nothing installs from.
+
+### Changed
+
+- **CI: repo-level security hardening** — added `.github/dependabot.yml` (weekly npm
+  and github-actions updates) and `.github/workflows/security.yml` (dependency audit +
+  secret scanning in CI). Enabled GitHub secret scanning, push protection, and
+  Dependabot security updates/automated fixes at the repository level.
+- **CI: gitleaks run via CLI instead of `gitleaks-action`** — `gitleaks/gitleaks-action@v2`
+  requires a paid license for organization-owned repos; switched the secret-scan job to
+  download and run the free/OSS gitleaks CLI directly.
+
 ## [0.2.2] - 2026-06-09
 
 ### Added
@@ -167,7 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models, per-model transform controls, and merge/export panel.
 - Dual-format build output (ESM + CJS) with TypeScript declarations.
 
-[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/poppod56/three-mesh-merger/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/poppod56/three-mesh-merger/compare/v0.1.3...v0.2.0
